@@ -1,6 +1,7 @@
 // Runs T3 Code's own UsageService over this machine's provider transcripts and merges the
-// result into site/data/usage.json. Read-only toward ~/.claude, ~/.codex, ~/.grok and ~/.t3;
-// the scanner's cache lives in ./state.
+// result into this machine's file, site/data/hosts/<key>.json. merge-usage.mjs adds the machines
+// up. Read-only toward ~/.claude, ~/.codex, ~/.grok and ~/.t3; the scanner's cache lives in ./state.
+import * as NodeCryptoHash from "node:crypto";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
@@ -28,10 +29,10 @@ const ProviderHostLive = await import(`${SRC}/provider/ProviderHostLive.ts`);
 const UsageService = await import(`${SRC}/usage/UsageService.ts`);
 
 const here = import.meta.dirname;
-const outPath = NodePath.join(here, "site/data/usage.json");
 // The scanner keeps 92 days of cache; older days come from the previous usage.json.
 const days = Number(process.argv[2] ?? 90);
-const timeZone = process.env.USAGE_TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+// Every machine buckets days in the same zone, so their days add up.
+const timeZone = process.env.USAGE_TZ ?? "Australia/Sydney";
 const userSettings = JSON.parse(
   NodeFS.readFileSync(NodePath.join(NodeOS.homedir(), ".t3/userdata/settings.json"), "utf8"),
 );
@@ -76,6 +77,11 @@ const program = Effect.gen(function* () {
 });
 
 const summary = await Effect.runPromise(program.pipe(Effect.scoped, Effect.provide(layer)));
+
+// The file is named after a hash of the scanner's random host id, so it says nothing about the machine.
+const hostId = NodeFS.readFileSync(NodePath.join(here, "state/usage-host-id"), "utf8").trim();
+const hostKey = NodeCryptoHash.createHash("sha256").update(hostId).digest("hex").slice(0, 8);
+const outPath = NodePath.join(here, "site/data/hosts", `${hostKey}.json`);
 
 // Public shape: no paths, hostnames or session ids.
 const fresh = summary.buckets.map((b) => ({

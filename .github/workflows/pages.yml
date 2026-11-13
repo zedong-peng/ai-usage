@@ -4,7 +4,7 @@ name: Pages
 on:
   push:
     branches: [main]
-    paths: [site/**, .github/workflows/pages.yml]
+    paths: [site/**, merge-usage.mjs, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -24,6 +24,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Add the machines up
+        run: node merge-usage.mjs
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

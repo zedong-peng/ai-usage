@@ -1,2 +1,4 @@
 node_modules
 state/
+# Built from site/data/hosts by merge-usage.mjs.
+site/data/usage.json
