@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Usage · Zedong Peng</title>
+<meta name="description" content="Daily coding-agent token usage and API-equivalent cost, scanned by T3 Code.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2' y='8' width='3' height='6' rx='1' fill='%23d97757'/><rect x='6.5' y='4' width='3' height='10' rx='1' fill='%23d97757'/><rect x='11' y='2' width='3' height='12' rx='1' fill='%23d97757'/></svg>">
+<style>
+  :root {
+    --bg: #ffffff; --fg: #0a0a0a; --muted: #737373; --border: #e8e8e8;
+    --surface: #f5f5f5; --contrast: #171717; --track: #f0f0f0;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0b0c; --fg: #f5f5f5; --muted: #8f8f94; --border: #232326;
+      --surface: #161618; --contrast: #f2f2f2; --track: #1d1d20;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0b0c; --fg: #f5f5f5; --muted: #8f8f94; --border: #232326;
+    --surface: #161618; --contrast: #f2f2f2; --track: #1d1d20;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 24px 16px 64px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 0 20px; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0; flex: 1; min-width: 120px; }
+  h2 { font-size: 13px; font-weight: 500; margin: 0 0 12px; }
+  .toggle { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--surface); }
+  .toggle button {
+    border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px;
+    padding: 4px 10px; border-radius: 6px; cursor: pointer;
+  }
+  .toggle button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 0 0 1px var(--border); }
+  .grid-top { display: grid; gap: 24px; }
+  @media (min-width: 900px) { .grid-top { grid-template-columns: minmax(0, 18rem) minmax(0, 1fr); } }
+  .big { font-size: 36px; font-weight: 600; letter-spacing: -0.01em; }
+  .stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  .prov-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+  .prov-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .dot { width: 8px; height: 8px; border-radius: 999px; flex: none; }
+  .tiny { font-size: 11px; }
+  .small { font-size: 12px; }
+  section + section { margin-top: 32px; }
+  .totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+  @media (min-width: 720px) { .totals { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+  .stat .v { font-size: 18px; font-weight: 600; }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: 240px; overflow: visible; }
+  .chart .gridline { stroke: var(--border); }
+  .chart text { fill: var(--muted); font-size: 10px; }
+  .tip {
+    position: absolute; pointer-events: none; z-index: 2; min-width: 180px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.12); display: none;
+  }
+  .tip .r { display: flex; justify-content: space-between; gap: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 8px 0; border-top: 1px solid var(--border); vertical-align: middle; }
+  td.r { text-align: right; white-space: nowrap; padding-left: 12px; }
+  .bar { height: 4px; border-radius: 999px; background: var(--track); margin-top: 6px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; border-radius: 999px; }
+  .model { overflow-wrap: anywhere; }
+  footer { margin-top: 40px; font-size: 12px; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Agent usage</h1>
+    <div class="toggle" id="period" role="group" aria-label="Period"></div>
+    <div class="toggle" id="metric" role="group" aria-label="Metric"></div>
+  </header>
+
+  <section class="grid-top">
+    <div class="stack">
+      <div>
+        <div class="big num" id="headline">–</div>
+        <div class="small muted num" id="subline"></div>
+      </div>
+      <div class="stack" id="providers" style="gap:16px"></div>
+    </div>
+    <div style="min-width:0">
+      <h2 id="chart-title">Daily cost</h2>
+      <div class="chart" id="chart"><svg id="svg" role="img" aria-label="Daily usage by provider"></svg><div class="tip" id="tip"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Totals</h2>
+    <div class="totals" id="totals"></div>
+  </section>
+
+  <section>
+    <h2>By model</h2>
+    <table><tbody id="models"></tbody></table>
+  </section>
+
+  <footer class="muted" id="footer"></footer>
+</main>
+
+<script>
+const PROVIDERS = {
+  claude: { label: "Claude Code", color: "#d97757" },
+  codex: { label: "Codex", color: "var(--contrast)" },
+  grok: { label: "Grok Build", color: "color-mix(in oklab, var(--contrast) 60%, var(--bg))" },
+  cursor: { label: "Cursor", color: "#8b8b8b" },
+  opencode: { label: "OpenCode", color: "#5b9bbd" },
+  antigravity: { label: "Antigravity", color: "#8c7bd1" },
+  pi: { label: "Pi", color: "#4d9f8a" },
+  muse: { label: "Muse Code", color: "#0866ff" },
+};
+const prov = (p) => PROVIDERS[p] ?? { label: p, color: "#999" };
+const PERIODS = [["7d", 7], ["30d", 30], ["90d", 90], ["All", 0]];
+const METRICS = [["Cost", "cost"], ["Tokens", "tokens"]];
+
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const state = { days: Number(store.get("usage.days", 30)), metric: store.get("usage.metric", "cost") };
+
+const usd = (n) => n >= 1000 ? "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 })
+  : "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const tok = (n) => {
+  for (const [d, s] of [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]])
+    if (n >= d) return (n / d).toLocaleString("en-US", { maximumFractionDigits: n / d >= 100 ? 0 : 1 }) + s;
+  return String(n);
+};
+const pct = (x) => (x * 100).toLocaleString("en-US", { maximumFractionDigits: x < 0.01 ? 1 : 0 }) + "%";
+const total = (t) => t.uncachedInputTokens + t.cachedInputTokens + t.cacheCreationTokens + t.outputTokens;
+const value = (b) => state.metric === "cost" ? b.costUsd : b.tokens;
+const fmt = (n) => state.metric === "cost" ? usd(n) : tok(n);
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k === "style" ? e.style.cssText = v : e.setAttribute(k, v);
+  e.append(...kids);
+  return e;
+};
+
+let DATA;
+
+function addDays(day, n) {
+  const d = new Date(day + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function render() {
+  const all = DATA.buckets;
+  const lastDay = DATA.today;
+  const firstDay = state.days ? addDays(lastDay, -(state.days - 1)) : (all[0]?.day ?? lastDay);
+  const rows = all.filter((b) => b.day >= firstDay && b.day <= lastDay).map((b) => ({ ...b, tokens: total(b.totals) }));
+
+  const sum = { cost: 0, tokens: 0, sessions: 0, cached: 0, uncached: 0, write: 0, output: 0, savings: 0 };
+  const byProv = new Map(), byModel = new Map(), byDay = new Map();
+  for (const b of rows) {
+    sum.cost += b.costUsd; sum.tokens += b.tokens; sum.sessions += b.sessions;
+    sum.cached += b.totals.cachedInputTokens; sum.uncached += b.totals.uncachedInputTokens;
+    sum.write += b.totals.cacheCreationTokens; sum.output += b.totals.outputTokens; sum.savings += b.cacheSavingsUsd;
+    const p = byProv.get(b.provider) ?? { cost: 0, tokens: 0, sessions: 0 };
+    p.cost += b.costUsd; p.tokens += b.tokens; p.sessions += b.sessions; byProv.set(b.provider, p);
+    const mk = b.provider + "\0" + b.model;
+    const m = byModel.get(mk) ?? { provider: b.provider, model: b.model, cost: 0, tokens: 0 };
+    m.cost += b.costUsd; m.tokens += b.tokens; byModel.set(mk, m);
+    const d = byDay.get(b.day) ?? new Map();
+    d.set(b.provider, (d.get(b.provider) ?? 0) + value(b)); byDay.set(b.day, d);
+  }
+  const key = state.metric === "cost" ? "cost" : "tokens";
+
+  document.getElementById("headline").textContent = fmt(sum[key]);
+  document.getElementById("subline").textContent =
+    `${sum.sessions.toLocaleString("en-US")} sessions` + (state.metric === "cost" ? " · API-equivalent estimate" : "");
+
+  const provs = [...byProv.entries()].sort((a, b) => b[1][key] - a[1][key]);
+  const pBox = document.getElementById("providers"); pBox.replaceChildren();
+  for (const [p, t] of provs) {
+    const share = sum[key] ? t[key] / sum[key] : 0;
+    pBox.append(el("div", {},
+      el("div", { class: "prov-row" },
+        el("span", { class: "prov-name" }, el("span", { class: "dot", style: `background:${prov(p).color}` }),
+          el("span", {}, prov(p).label), el("span", { class: "tiny muted num" }, `${t.sessions.toLocaleString("en-US")} sessions`)),
+        el("span", { class: "num", style: "font-weight:500" }, fmt(t[key]))),
+      el("div", { class: "small muted num" }, state.metric === "cost"
+        ? `${pct(share)} of cost · ${tok(t.tokens)} tokens` : `${pct(share)} of tokens · ${usd(t.cost)}`)));
+  }
+
+  document.getElementById("chart-title").textContent = state.metric === "cost" ? "Daily cost" : "Daily processed tokens";
+  const days = []; for (let d = firstDay; d <= lastDay; d = addDays(d, 1)) days.push(d);
+  drawChart(days, byDay, provs.map(([p]) => p));
+
+  const totals = [["Processed tokens", tok(sum.tokens)], ["Cached input", tok(sum.cached)],
+    ["Uncached input", tok(sum.uncached + sum.write)], ["Output", tok(sum.output)], ["Cache savings", usd(sum.savings)]];
+  document.getElementById("totals").replaceChildren(...totals.map(([l, v]) =>
+    el("div", { class: "stat" }, el("div", { class: "small muted" }, l), el("div", { class: "v num" }, v))));
+
+  const models = [...byModel.values()].sort((a, b) => b[key] - a[key]);
+  const peak = models[0]?.[key] || 1;
+  document.getElementById("models").replaceChildren(...models.map((m) => el("tr", {},
+    el("td", {}, el("div", { class: "prov-name" }, el("span", { class: "dot", style: `background:${prov(m.provider).color}` }),
+        el("span", { class: "model" }, m.model)),
+      el("div", { class: "bar" }, el("span", { style: `width:${(m[key] / peak) * 100}%;background:${prov(m.provider).color}` }))),
+    el("td", { class: "r small muted num" }, state.metric === "cost" ? tok(m.tokens) : usd(m.cost)),
+    el("td", { class: "r num", style: "font-weight:500" }, fmt(m[key])))));
+
+  for (const [id, opts, cur] of [["period", PERIODS, state.days], ["metric", METRICS, state.metric]])
+    for (const b of document.getElementById(id).children) b.setAttribute("aria-pressed", String(b.dataset.v === String(cur)));
+}
+
+function drawChart(days, byDay, order) {
+  const svg = document.getElementById("svg"), tip = document.getElementById("tip");
+  const W = svg.clientWidth || 600, H = 240, padL = 44, padB = 20, padT = 8;
+  const totals = days.map((d) => [...(byDay.get(d)?.values() ?? [])].reduce((a, b) => a + b, 0));
+  const max = Math.max(...totals, 0) || 1;
+  const step = niceStep(max / 4), top = Math.ceil(max / step) * step;
+  const y = (v) => H - padB - (v / top) * (H - padB - padT);
+  const bw = (W - padL) / days.length, gap = Math.min(4, bw * 0.25);
+  const ns = "http://www.w3.org/2000/svg";
+  const make = (tag, attrs) => { const e = document.createElementNS(ns, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.replaceChildren();
+  for (let v = 0; v <= top + 1e-9; v += step) {
+    svg.append(make("line", { x1: padL, x2: W, y1: y(v), y2: y(v), class: "gridline" }));
+    const t = make("text", { x: padL - 6, y: y(v) + 3, "text-anchor": "end" }); t.textContent = state.metric === "cost" ? "$" + v.toLocaleString("en-US") : tok(v); svg.append(t);
+  }
+  const labelEvery = Math.ceil(days.length / Math.max(2, Math.floor((W - padL) / 64)));
+  days.forEach((d, i) => {
+    const x = padL + i * bw + gap / 2, w = Math.max(1, bw - gap);
+    let acc = 0;
+    for (const p of [...order].reverse()) {
+      const v = byDay.get(d)?.get(p) ?? 0; if (!v) continue;
+      svg.append(make("rect", { x, y: y(acc + v), width: w, height: Math.max(0.5, y(acc) - y(acc + v)), rx: Math.min(2, w / 3), style: `fill:${prov(p).color}` }));
+      acc += v;
+    }
+    if (i % labelEvery === 0) {
+      const t = make("text", { x: x + w / 2, y: H - 4, "text-anchor": "middle" });
+      t.textContent = new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+      svg.append(t);
+    }
+    const hit = make("rect", { x: padL + i * bw, y: padT, width: bw, height: H - padB - padT, fill: "transparent" });
+    hit.addEventListener("pointerenter", () => {
+      const dayMap = byDay.get(d) ?? new Map();
+      tip.replaceChildren(el("div", { class: "r", style: "margin-bottom:4px;font-weight:500" },
+        el("span", {}, new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })),
+        el("span", { class: "num" }, fmt(totals[i]))),
+        ...order.filter((p) => dayMap.get(p)).map((p) => el("div", { class: "r" },
+          el("span", { class: "prov-name" }, el("span", { class: "dot", style: `background:${prov(p).color}` }), prov(p).label),
+          el("span", { class: "num muted" }, fmt(dayMap.get(p))))));
+      tip.style.display = "block";
+      const box = svg.getBoundingClientRect(), cx = ((padL + (i + 0.5) * bw) / W) * box.width;
+      tip.style.left = Math.min(Math.max(0, cx - tip.offsetWidth / 2), box.width - tip.offsetWidth) + "px";
+      tip.style.top = "-8px";
+    });
+    hit.addEventListener("pointerleave", () => { tip.style.display = "none"; });
+    svg.append(hit);
+  });
+}
+
+function niceStep(raw) {
+  const mag = 10 ** Math.floor(Math.log10(raw || 1));
+  for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * mag) return m * mag;
+  return 10 * mag;
+}
+
+for (const [id, opts, k] of [["period", PERIODS, "days"], ["metric", METRICS, "metric"]]) {
+  const box = document.getElementById(id);
+  for (const [label, v] of opts) {
+    const b = el("button", { type: "button", "data-v": String(v) }, label);
+    b.addEventListener("click", () => { state[k] = k === "days" ? Number(v) : v; store.set("usage." + k, String(v)); render(); });
+    box.append(b);
+  }
+}
+
+fetch("data/usage.json", { cache: "no-cache" }).then((r) => r.json()).then((data) => {
+  data.today = new Date(data.updatedAt).toLocaleDateString("en-CA", { timeZone: data.timeZone });
+  DATA = data;
+  const first = data.buckets[0]?.day;
+  document.getElementById("footer").innerHTML =
+    `Updated ${new Date(data.updatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} · ` +
+    `history since ${first ?? "—"} · days in ${data.timeZone}. Costs are API list-price equivalents from ` +
+    `<a href="https://github.com/BerriAI/litellm">LiteLLM</a> rates, not what a subscription actually bills. ` +
+    `Scanned with <a href="https://github.com/pingdotgg/t3code">T3 Code</a>'s usage reader · ` +
+    `<a href="https://github.com/zedong-peng/ai-usage">source</a>`;
+  render();
+  addEventListener("resize", () => render());
+});
+</script>
+</body>
+</html>
