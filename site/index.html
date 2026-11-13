@@ -132,6 +132,7 @@ const PROVIDERS = {
   cursor: { label: "Cursor", color: "#008300" },
   antigravity: { label: "Antigravity", color: "#6250d6" },
   muse: { label: "Muse Code", color: "#e34948" },
+  gemini: { label: "Gemini CLI", color: "#b0aea5" },
 };
 const prov = (p) => PROVIDERS[p] ?? { label: p, color: "#b0aea5" };
 const PERIODS = [["7d", 7], ["30d", 30], ["90d", 90], ["All", 0]];
@@ -193,8 +194,11 @@ function render() {
   const key = state.metric === "cost" ? "cost" : "tokens";
 
   document.getElementById("headline").textContent = fmt(sum[key]);
+  // The earlier collector did not record sessions, so a period that reaches into the archive shows none.
+  const counted = !rows.some((b) => b.costSource === "archive");
+  const sessions = (n) => counted ? `${n.toLocaleString("en-US")} sessions` : "";
   document.getElementById("subline").textContent =
-    `${sum.sessions.toLocaleString("en-US")} sessions` + (state.metric === "cost" ? " · API-equivalent estimate" : "");
+    [sessions(sum.sessions), state.metric === "cost" ? "API-equivalent estimate" : ""].filter(Boolean).join(" · ");
 
   const provs = [...byProv.entries()].sort((a, b) => b[1][key] - a[1][key]);
   const pBox = document.getElementById("providers"); pBox.replaceChildren();
@@ -203,7 +207,7 @@ function render() {
     pBox.append(el("div", { class: "prov" },
       el("div", { class: "prov-row" },
         el("span", { class: "prov-name" }, el("span", { class: "dot", style: `background:${prov(p).color}` }),
-          el("span", {}, prov(p).label), el("span", { class: "small num sess" }, `${t.sessions.toLocaleString("en-US")} sessions`)),
+          el("span", {}, prov(p).label), el("span", { class: "small num sess" }, sessions(t.sessions))),
         el("span", { class: "num val" }, fmt(t[key]))),
       el("div", { class: "bar" }, el("span", { style: `width:${share * 100}%;background:${prov(p).color}` })),
       el("div", { class: "small num" }, state.metric === "cost"
@@ -305,7 +309,9 @@ fetch("data/usage.json", { cache: "no-cache" }).then((r) => r.json()).then((data
   const first = data.buckets[0]?.day;
   document.getElementById("footer").innerHTML =
     `Updated ${new Date(data.updatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} · ` +
-    `history since ${first ?? "—"} · days in ${data.timeZone} · ${data.machines ?? 1} machine${(data.machines ?? 1) === 1 ? "" : "s"}. Costs are API list-price equivalents from ` +
+    `history since ${first ?? "—"} · days in ${data.timeZone} · ${data.machines ?? 1} machine${(data.machines ?? 1) === 1 ? "" : "s"}. ` +
+    (data.archivedUntil ? `Days up to ${data.archivedUntil} are an archive from an earlier collector, which covered three machines and priced tokens with its own table. ` : "") +
+    `Costs are API list-price equivalents from ` +
     `<a href="https://github.com/BerriAI/litellm">LiteLLM</a> rates, not what a subscription actually bills. ` +
     `Scanned with <a href="https://github.com/pingdotgg/t3code">T3 Code</a>'s usage reader. ` +
     `<a href="https://github.com/zedong-peng/ai-usage">Source</a>.`;

@@ -14,6 +14,9 @@ GitHub only hosts the result.
   hostnames or session ids, and `<key>` is a hash of the scanner's random host id.
 - `merge-usage.mjs` adds the machines' files into `site/data/usage.json`, which the page reads.
   It is built, not committed, so two machines never touch the same file.
+- `site/data/archive.json` is the frozen history of an earlier collector (15 October 2025 to
+  2 November 2026, three machines). The merge takes every day up to its `untilDay` from the
+  archive and every later day from the machines' files, so no day is counted twice.
 - `publish.sh` runs the export, then commits and pushes this machine's file when it changed.
 - `.github/workflows/pages.yml` runs the merge and deploys `site/` to GitHub Pages on push.
 - A timer on each machine (systemd `ai-usage.timer` on Linux, a launchd agent on macOS) runs

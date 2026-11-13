@@ -1,6 +1,8 @@
 // Adds the machines' files, site/data/hosts/*.json, into site/data/usage.json, which the page reads.
 // Each machine writes only its own file, so machines never conflict; the Pages workflow runs this.
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+// site/data/archive.json is the frozen history from the earlier collector, which covered machines that
+// no longer export. It owns every day up to its untilDay; the machines' files own the days after.
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const dir = join(import.meta.dirname, "site/data/hosts");
@@ -9,9 +11,13 @@ const hosts = readdirSync(dir).filter((f) => f.endsWith(".json")).sort()
 const zones = new Set(hosts.map((h) => h.timeZone));
 if (zones.size > 1) throw new Error(`machines bucket days in different zones: ${[...zones].join(", ")}`);
 
+const archivePath = join(import.meta.dirname, "site/data/archive.json");
+const archive = existsSync(archivePath) ? JSON.parse(readFileSync(archivePath, "utf8")) : { untilDay: "", buckets: [] };
+
 const merged = new Map();
-for (const host of hosts) {
+for (const host of [archive, ...hosts]) {
   for (const b of host.buckets) {
+    if ((host === archive) !== (b.day <= archive.untilDay)) continue;
     const key = `${b.day}\0${b.provider}\0${b.model}`;
     const m = merged.get(key);
     if (!m) { merged.set(key, { ...b, totals: { ...b.totals } }); continue; }
@@ -28,6 +34,6 @@ const buckets = [...merged.values()].sort(
 );
 writeFileSync(
   join(import.meta.dirname, "site/data/usage.json"),
-  JSON.stringify({ updatedAt: latest("updatedAt"), timeZone: [...zones][0], pricingFetchedAt: latest("pricingFetchedAt"), machines: hosts.length, buckets }) + "\n",
+  JSON.stringify({ updatedAt: latest("updatedAt"), timeZone: [...zones][0], pricingFetchedAt: latest("pricingFetchedAt"), machines: hosts.length, archivedUntil: archive.untilDay || null, buckets }) + "\n",
 );
 console.log(`${hosts.length} machine(s), ${buckets.length} buckets`);
